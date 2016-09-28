@@ -65,11 +65,13 @@ bool bmp_read_dib_header(FILE *fp, bmp_dib_header_t *header)
 	assert(fp);
 	assert(header);
 
-	return fread(&(header->header_sz), sizeof(uint32_t), 1, fp) &&
+	auto ret = fread(header, sizeof(bmp_dib_header_t), 1, fp);
+	return ret > 0 ? true : false;
+	/*return fread(&(header->header_sz), sizeof(uint32_t), 1, fp) &&
 		fread(&(header->width), sizeof(uint32_t), 1, fp) &&
 		fread(&(header->height), sizeof(uint32_t), 1, fp) &&
 		fread(&(header->nplanes), sizeof(uint16_t), 1, fp) &&
-		fread(&(header->depth), sizeof(uint16_t), 1, fp);
+		fread(&(header->depth), sizeof(uint16_t), 1, fp);*/
 }
 
 
@@ -94,4 +96,28 @@ void *bmp_read_pixel_data(FILE *fp, uint32_t offset, const bmp_dib_header_t *hea
 	}
 
 	return buffer;
+}
+
+bool save_bmp_data(const char *filename, const bmp_header_t *header, const bmp_dib_header_t *dib_header, const void *pixel_data)
+{
+	FILE *out = fopen(filename, "wb");
+	if (out)
+	{
+		//Write file header
+		//fwrite(&header, 1,sizeof(header), out);
+		fwrite(header->magic, 1, 2, out);     // BM 2 Bytes
+		fwrite(&header->filesz, 1, 4, out);   // file size 4 Bytes
+		fwrite(&header->reserved, 1, 4, out); // reserved bytes 4Bytes
+		fwrite(&header->offset, 1, 4, out);   // offset 4Bytes
+
+		//Write dib header
+		fwrite(dib_header, 1, sizeof(bmp_dib_header_t), out);
+
+		//Write pixels
+		fwrite(pixel_data, 1, dib_header->width * dib_header->height * dib_header->depth / 8, out);
+		fclose(out);
+
+		return true;
+	}
+	return false;
 }
