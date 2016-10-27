@@ -24,7 +24,8 @@ int to_pcm()
 
 	auto duration = media.pFormatContext->duration + (media.pFormatContext->duration <= INT64_MAX - 5000 ? 5000 : 0);
 
-	ofstream ofs("wildlife.wav", ofstream::binary);
+	ofstream ofs("wildlife_touch.wav", ofstream::binary); // 变调后的wav
+	ofstream origin_ofs("origin.wav", ofstream::binary); // 提取的原始的wav
 
 	AVSampleFormat dst_format = AV_SAMPLE_FMT_S16; 
 	uint8_t dst_channels = 2;
@@ -57,6 +58,7 @@ int to_pcm()
 	soundtouch::SAMPLETYPE touch_buffer[96000]; 
 
 	int pcm_data_size = 0;
+	int origin_data_size = 0;
 	while (av_read_frame(media.pFormatContext, packet) >= 0)
 	{
 		if (packet->stream_index == media.audio_stream_index)
@@ -77,10 +79,18 @@ int to_pcm()
 
 			// 将解码后的buffer(uint8*)转换为soundtouch::SAMPLETYPE，也就是singed int 16
 			auto len = nb * dst_channels * av_get_bytes_per_sample(dst_format);
+
+			origin_ofs.write((char*)buffer, len);
+			origin_data_size += len;
+
 			for (auto i = 0; i < len; i++)
 			{
 				touch_buffer[i] = (buffer[i * 2] | (buffer[i * 2 + 1] << 8));	
 			}
+
+			// 16位有符号整数的最大值 0x7FFF => 32767   20 * log(sample / 32767) = #dBFS
+
+			// 10ms的sample  10 * 44100 / 1000 = 441 个sample
 
 			// 传入Sample
 			s_touch.putSamples(touch_buffer, nb);
@@ -121,6 +131,14 @@ int to_pcm()
 	CWaveFile::write_header(ofs, header);
 
 	ofs.close();
+	
+	header.data->cb_size = ((origin_data_size + 1) / 2) * 2;
+	header.riff->cb_size = 4 + 4 + header.fmt->cb_size + 4 + 4 + header.data->cb_size + 4;
+	origin_ofs.seekp(0, ios::beg);
+	CWaveFile::write_header(origin_ofs, header);
+
+	origin_ofs.close();
+
 	delete[] buffer;
 	swr_free(&swr_ctx);
 	av_packet_free(&packet);
@@ -130,6 +148,9 @@ int to_pcm()
 
 	return 0;
 }
+
+
+
 
 int main()
 {
